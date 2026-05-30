@@ -63,7 +63,6 @@
       <tr>
         <th style="width:20px">#</th>
         <th class="left">Etappe / Løper</th>
-        <th style="width:34px">Dist</th>
         <th style="width:42px">Planlagt</th>
         <th style="width:80px">+/− min</th>
         <th style="width:42px">Justert</th>
@@ -189,7 +188,6 @@ function render() {
     r1.innerHTML = `
       <td class="nr" rowspan="2">${e.nr}</td>
       <td class="navn">${e.navn}</td>
-      <td class="dist" rowspan="2">${(e.dist/1000).toFixed(1)}k</td>
       <td class="time-val" id="plan-${i}">${fmtMin(baseStarts[i])}</td>
       <td class="adj-cell" rowspan="2">
         <div class="adj-wrap">
