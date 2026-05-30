@@ -63,7 +63,7 @@
         <th style="width:42px">Planlagt</th>
         <th style="width:80px">+/− min</th>
         <th style="width:42px">Justert</th>
-        <th style="width:40px">Mål</th>
+        
       </tr>
     </thead>
     <tbody id="tbody"></tbody>
@@ -71,7 +71,7 @@
       <tr>
         <td colspan="5" style="text-align:right; font-weight:500; font-size:11px; color:#5a7a9a;">Forventet slutt (etter etappe 10):</td>
         <td id="foot-eff"></td>
-        <td id="foot-mal"></td>
+        
       </tr>
     </tfoot>
   </table>
@@ -122,7 +122,6 @@ function updateAll() {
   const starts = computeStarts();
   for (let i = 0; i < etapper.length; i++) {
     const eff = starts[i];
-    const mal = eff + etapper[i].tid_s / 60;
     const totalAdj = adj[i];
 
     document.getElementById('adj-' + i).textContent = (totalAdj >= 0 ? '+' : '') + totalAdj;
@@ -130,7 +129,6 @@ function updateAll() {
     document.getElementById('plan-' + i).textContent = fmtMin(starts[i] - adj[i]); // planlagt = without this adj
     document.getElementById('eff-' + i).textContent = fmtMin(eff);
     document.getElementById('eff-' + i).className = 'time-val' + (totalAdj !== 0 ? ' changed' : '');
-    document.getElementById('mal-' + i).textContent = fmtMin(mal);
   }
 
   const last = etapper.length - 1;
@@ -148,7 +146,6 @@ function render() {
     const e = etapper[i];
     const eff = starts[i];
     const planlagt = eff - adj[i];
-    const mal = eff + e.tid_s / 60;
     const alt = i % 2 === 0 ? 'alt' : '';
 
     const r1 = document.createElement('tr');
@@ -166,7 +163,7 @@ function render() {
         </div>
       </td>
       <td class="time-val${adj[i]!==0?' changed':''}" id="eff-${i}">${fmtMin(eff)}</td>
-      <td class="time-val mal" id="mal-${i}">${fmtMin(mal)}</td>
+      
     `;
 
     const r2 = document.createElement('tr');
@@ -175,7 +172,7 @@ function render() {
       <td class="loper">${e.loper}</td>
       <td class="label">planlagt</td>
       <td class="label">justert</td>
-      <td class="label">mål</td>
+      
     `;
 
     tbody.appendChild(r1);
@@ -184,7 +181,6 @@ function render() {
 
   const last = etapper.length - 1;
   document.getElementById('foot-eff').textContent = fmtMin(starts[last]);
-  document.getElementById('foot-mal').textContent = fmtMin(starts[last] + etapper[last].tid_s / 60);
 }
 
 function changeAdj(idx, delta) {
