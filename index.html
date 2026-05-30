@@ -17,28 +17,20 @@
   .stat { background: #e8f0fb; border-radius: 8px; padding: 6px 10px; text-align: center; }
   .stat-label { font-size: 10px; color: #6a8aaa; font-weight: 500; }
   .stat-val { font-size: 14px; font-weight: 700; color: #1a3a5c; }
-
-  /* Table */
   table { width: 100%; border-collapse: collapse; font-size: 13px; }
   thead th { background: #1a3a5c; color: #fff; padding: 7px 5px; font-size: 11px; font-weight: 600; text-align: center; }
   thead th.left { text-align: left; }
-
-  /* Each etappe = 2 rows */
   tr.row1 td { padding: 7px 5px 2px 5px; border-top: 1px solid #e4edf7; }
   tr.row2 td { padding: 2px 5px 7px 5px; }
   tr.row1.alt td, tr.row2.alt td { background: #f4f8fd; }
-  tr.row1 td, tr.row2 td { vertical-align: middle; }
-
   .nr { color: #aaa; font-size: 11px; text-align: center; width: 20px; }
   .navn { font-weight: 700; color: #1a3a5c; font-size: 13px; }
   .loper { color: #666; font-size: 12px; }
   .dist { color: #999; font-size: 11px; text-align: right; }
-
   .label { font-size: 10px; color: #aaa; text-align: center; }
   .time-val { font-size: 13px; font-weight: 600; color: #333; text-align: center; font-variant-numeric: tabular-nums; }
   .time-val.changed { color: #e67e22; }
   .time-val.mal { color: #555; font-weight: 400; font-size: 12px; }
-
   .adj-cell { text-align: center; }
   .adj-wrap { display: flex; align-items: center; justify-content: center; gap: 3px; }
   .adj-btn { background: #e8f0fb; border: none; border-radius: 6px; width: 26px; height: 26px; font-size: 16px; font-weight: 700; color: #1a3a5c; cursor: pointer; line-height: 1; }
@@ -46,7 +38,6 @@
   .adj-num { font-size: 13px; font-weight: 700; min-width: 28px; text-align: center; font-variant-numeric: tabular-nums; }
   .adj-num.neg { color: #27ae60; }
   .adj-num.pos { color: #e67e22; }
-
   tfoot td { background: #dce8f5; font-weight: 700; color: #1a3a5c; padding: 8px 5px; font-size: 12px; text-align: center; border-top: 2px solid #b0cce8; }
   .note { margin-top: 12px; font-size: 11px; color: #bbb; text-align: center; line-height: 1.6; }
 </style>
@@ -60,10 +51,9 @@
     <input type="time" id="startTime" value="14:45">
     <div class="stats">
       <div class="stat"><div class="stat-label">Total dist</div><div class="stat-val">20.2 km</div></div>
-      <div class="stat"><div class="stat-label">Total tid</div><div class="stat-val" id="total-tid">1t 36m</div></div>
+      <div class="stat"><div class="stat-label">Total tid</div><div class="stat-val">1t 36m</div></div>
     </div>
   </div>
-
   <table>
     <thead>
       <tr>
@@ -85,7 +75,7 @@
       </tr>
     </tfoot>
   </table>
-  <p class="note">Trykk − / + for å justere når en løper er foran eller bak skjema.</p>
+  <p class="note">Trykk − / + for å justere når en løper er foran eller bak skjema.<br>Alle påfølgende starttider oppdateres automatisk.</p>
 </div>
 
 <script>
@@ -112,43 +102,62 @@ function parseStartMin() {
 
 function fmtMin(totalMin) {
   const t = ((totalMin % 1440) + 1440) % 1440;
-  const h = Math.floor(t / 60);
-  const m = Math.round(t % 60);
-  return h + ':' + String(m).padStart(2, '0');
+  return Math.floor(t/60) + ':' + String(Math.round(t%60)).padStart(2,'0');
 }
 
-function computeBaseStarts() {
+// Compute effective start times for all etapper, cascading adjustments
+function computeStarts() {
   const base = parseStartMin();
   const starts = [];
   let cur = base;
   for (let i = 0; i < etapper.length; i++) {
+    cur += adj[i]; // apply this etappe's adjustment
     starts.push(cur);
-    cur += etapper[i].tid_s / 60;
+    cur += etapper[i].tid_s / 60; // add running time to get next etappe's base
   }
   return starts;
 }
 
+function updateAll() {
+  const starts = computeStarts();
+  for (let i = 0; i < etapper.length; i++) {
+    const eff = starts[i];
+    const mal = eff + etapper[i].tid_s / 60;
+    const totalAdj = adj[i];
+
+    document.getElementById('adj-' + i).textContent = (totalAdj >= 0 ? '+' : '') + totalAdj;
+    document.getElementById('adj-' + i).className = 'adj-num ' + (totalAdj < 0 ? 'neg' : totalAdj > 0 ? 'pos' : '');
+    document.getElementById('plan-' + i).textContent = fmtMin(starts[i] - adj[i]); // planlagt = without this adj
+    document.getElementById('eff-' + i).textContent = fmtMin(eff);
+    document.getElementById('eff-' + i).className = 'time-val' + (totalAdj !== 0 ? ' changed' : '');
+    document.getElementById('mal-' + i).textContent = fmtMin(mal);
+  }
+
+  const last = etapper.length - 1;
+  const effLast = starts[last];
+  document.getElementById('foot-eff').textContent = fmtMin(effLast);
+  document.getElementById('foot-mal').textContent = fmtMin(effLast + etapper[last].tid_s / 60);
+}
+
 function render() {
-  const baseStarts = computeBaseStarts();
+  const starts = computeStarts();
   const tbody = document.getElementById('tbody');
   tbody.innerHTML = '';
 
   for (let i = 0; i < etapper.length; i++) {
     const e = etapper[i];
-    const base = baseStarts[i];
-    const eff = base + adj[i];
+    const eff = starts[i];
+    const planlagt = eff - adj[i];
     const mal = eff + e.tid_s / 60;
-    const changed = adj[i] !== 0;
     const alt = i % 2 === 0 ? 'alt' : '';
 
-    // Row 1: nr | navn | dist | planlagt | adj (rowspan) | justert | mål
     const r1 = document.createElement('tr');
     r1.className = `row1 ${alt}`;
     r1.innerHTML = `
       <td class="nr" rowspan="2">${e.nr}</td>
       <td class="navn">${e.navn}</td>
       <td class="dist" rowspan="2">${(e.dist/1000).toFixed(1)}k</td>
-      <td class="time-val">${fmtMin(base)}</td>
+      <td class="time-val" id="plan-${i}">${fmtMin(planlagt)}</td>
       <td class="adj-cell" rowspan="2">
         <div class="adj-wrap">
           <button class="adj-btn" onclick="changeAdj(${i},-1)">−</button>
@@ -156,11 +165,10 @@ function render() {
           <button class="adj-btn" onclick="changeAdj(${i},1)">+</button>
         </div>
       </td>
-      <td class="time-val ${changed?'changed':''}" id="eff-${i}">${fmtMin(eff)}</td>
+      <td class="time-val${adj[i]!==0?' changed':''}" id="eff-${i}">${fmtMin(eff)}</td>
       <td class="time-val mal" id="mal-${i}">${fmtMin(mal)}</td>
     `;
 
-    // Row 2: løper | labels
     const r2 = document.createElement('tr');
     r2.className = `row2 ${alt}`;
     r2.innerHTML = `
@@ -174,29 +182,14 @@ function render() {
     tbody.appendChild(r2);
   }
 
-  updateFooter(baseStarts);
-}
-
-function updateFooter(baseStarts) {
   const last = etapper.length - 1;
-  const eff = baseStarts[last] + adj[last];
-  const mal = eff + etapper[last].tid_s / 60;
-  document.getElementById('foot-eff').textContent = fmtMin(eff);
-  document.getElementById('foot-mal').textContent = fmtMin(mal);
+  document.getElementById('foot-eff').textContent = fmtMin(starts[last]);
+  document.getElementById('foot-mal').textContent = fmtMin(starts[last] + etapper[last].tid_s / 60);
 }
 
 function changeAdj(idx, delta) {
   adj[idx] += delta;
-  const baseStarts = computeBaseStarts();
-  const eff = baseStarts[idx] + adj[idx];
-  const mal = eff + etapper[idx].tid_s / 60;
-
-  document.getElementById('adj-' + idx).textContent = (adj[idx]>=0?'+':'') + adj[idx];
-  document.getElementById('adj-' + idx).className = 'adj-num ' + (adj[idx]<0?'neg':adj[idx]>0?'pos':'');
-  document.getElementById('eff-' + idx).textContent = fmtMin(eff);
-  document.getElementById('eff-' + idx).className = 'time-val ' + (adj[idx]!==0?'changed':'');
-  document.getElementById('mal-' + idx).textContent = fmtMin(mal);
-  updateFooter(baseStarts);
+  updateAll();
 }
 
 document.getElementById('startTime').addEventListener('change', render);
