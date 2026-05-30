@@ -23,6 +23,7 @@
   tr.row1 td { padding: 7px 5px 2px 5px; border-top: 1px solid #e4edf7; }
   tr.row2 td { padding: 2px 5px 7px 5px; }
   tr.row1.alt td, tr.row2.alt td { background: #f4f8fd; }
+  tr.row1.done td, tr.row2.done td { opacity: 0.4; }
   .nr { color: #aaa; font-size: 11px; text-align: center; width: 20px; }
   .navn { font-weight: 700; color: #1a3a5c; font-size: 13px; }
   .loper { color: #666; font-size: 12px; }
@@ -30,14 +31,17 @@
   .label { font-size: 10px; color: #aaa; text-align: center; }
   .time-val { font-size: 13px; font-weight: 600; color: #333; text-align: center; font-variant-numeric: tabular-nums; }
   .time-val.changed { color: #e67e22; }
-  .time-val.mal { color: #555; font-weight: 400; font-size: 12px; }
   .adj-cell { text-align: center; }
   .adj-wrap { display: flex; align-items: center; justify-content: center; gap: 3px; }
   .adj-btn { background: #e8f0fb; border: none; border-radius: 6px; width: 26px; height: 26px; font-size: 16px; font-weight: 700; color: #1a3a5c; cursor: pointer; line-height: 1; }
   .adj-btn:active { background: #b8d0ea; }
+  .adj-btn:disabled { opacity: 0.3; cursor: default; }
   .adj-num { font-size: 13px; font-weight: 700; min-width: 28px; text-align: center; font-variant-numeric: tabular-nums; }
   .adj-num.neg { color: #27ae60; }
   .adj-num.pos { color: #e67e22; }
+  .check-cell { text-align: center; }
+  .check-cell input[type=checkbox] { width: 18px; height: 18px; accent-color: #27ae60; cursor: pointer; }
+  .check-cell input[type=checkbox]:disabled { cursor: default; }
   tfoot td { background: #dce8f5; font-weight: 700; color: #1a3a5c; padding: 8px 5px; font-size: 12px; text-align: center; border-top: 2px solid #b0cce8; }
   .note { margin-top: 12px; font-size: 11px; color: #bbb; text-align: center; line-height: 1.6; }
 </style>
@@ -63,19 +67,18 @@
         <th style="width:42px">Planlagt</th>
         <th style="width:80px">+/− min</th>
         <th style="width:42px">Justert</th>
-        
+        <th style="width:36px">✓</th>
       </tr>
     </thead>
     <tbody id="tbody"></tbody>
     <tfoot>
       <tr>
         <td colspan="5" style="text-align:right; font-weight:500; font-size:11px; color:#5a7a9a;">Forventet slutt (etter etappe 10):</td>
-        <td id="foot-eff"></td>
-        
+        <td id="foot-eff" colspan="2"></td>
       </tr>
     </tfoot>
   </table>
-  <p class="note">Trykk − / + for å justere når en løper er foran eller bak skjema.<br>Alle påfølgende starttider oppdateres automatisk.</p>
+  <p class="note">Trykk − / + for å justere forsinkelse/forsprang.<br>Huk av ✓ når veksling er utført — tidligere etapper gråes ut.</p>
 </div>
 
 <script>
@@ -93,6 +96,7 @@ const etapper = [
 ];
 
 const adj = new Array(etapper.length).fill(0);
+const done = new Array(etapper.length).fill(false);
 
 function parseStartMin() {
   const val = document.getElementById('startTime').value || '14:45';
@@ -105,7 +109,6 @@ function fmtMin(totalMin) {
   return Math.floor(t/60) + ':' + String(Math.round(t%60)).padStart(2,'0');
 }
 
-// Compute base (planlagt) starts - no adjustments
 function computeBaseStarts() {
   const base = parseStartMin();
   const starts = [];
@@ -117,7 +120,6 @@ function computeBaseStarts() {
   return starts;
 }
 
-// Compute effective start times, cascading adjustments
 function computeStarts() {
   const base = parseStartMin();
   const starts = [];
@@ -130,12 +132,34 @@ function computeStarts() {
   return starts;
 }
 
+// Last etappe that is checked
+function lastDone() {
+  let last = -1;
+  for (let i = 0; i < done.length; i++) if (done[i]) last = i;
+  return last;
+}
+
 function updateAll() {
   const starts = computeStarts();
   const baseStarts = computeBaseStarts();
+  const cutoff = lastDone();
+
   for (let i = 0; i < etapper.length; i++) {
+    const isDone = i <= cutoff;
     const eff = starts[i];
     const totalAdj = adj[i];
+
+    // Grey out rows
+    const r1 = document.getElementById('row1-' + i);
+    const r2 = document.getElementById('row2-' + i);
+    if (isDone) {
+      r1.classList.add('done'); r2.classList.add('done');
+    } else {
+      r1.classList.remove('done'); r2.classList.remove('done');
+    }
+
+    // Disable buttons for done etapper
+    document.querySelectorAll(`.adj-btn-${i}`).forEach(b => b.disabled = isDone);
 
     document.getElementById('adj-' + i).textContent = (totalAdj >= 0 ? '+' : '') + totalAdj;
     document.getElementById('adj-' + i).className = 'adj-num ' + (totalAdj < 0 ? 'neg' : totalAdj > 0 ? 'pos' : '');
@@ -145,47 +169,48 @@ function updateAll() {
   }
 
   const last = etapper.length - 1;
-  const effLast = starts[last];
-  document.getElementById('foot-eff').textContent = fmtMin(effLast);
-  document.getElementById('foot-mal').textContent = fmtMin(effLast + etapper[last].tid_s / 60);
+  document.getElementById('foot-eff').textContent = fmtMin(starts[last] + etapper[last].tid_s / 60);
 }
 
 function render() {
   const starts = computeStarts();
+  const baseStarts = computeBaseStarts();
   const tbody = document.getElementById('tbody');
   tbody.innerHTML = '';
 
   for (let i = 0; i < etapper.length; i++) {
     const e = etapper[i];
     const eff = starts[i];
-    const planlagt = computeBaseStarts()[i];
     const alt = i % 2 === 0 ? 'alt' : '';
 
     const r1 = document.createElement('tr');
     r1.className = `row1 ${alt}`;
+    r1.id = `row1-${i}`;
     r1.innerHTML = `
       <td class="nr" rowspan="2">${e.nr}</td>
       <td class="navn">${e.navn}</td>
       <td class="dist" rowspan="2">${(e.dist/1000).toFixed(1)}k</td>
-      <td class="time-val" id="plan-${i}">${fmtMin(planlagt)}</td>
+      <td class="time-val" id="plan-${i}">${fmtMin(baseStarts[i])}</td>
       <td class="adj-cell" rowspan="2">
         <div class="adj-wrap">
-          <button class="adj-btn" onclick="changeAdj(${i},-1)">−</button>
-          <span class="adj-num ${adj[i]<0?'neg':adj[i]>0?'pos':''}" id="adj-${i}">${adj[i]>=0?'+':''}${adj[i]}</span>
-          <button class="adj-btn" onclick="changeAdj(${i},1)">+</button>
+          <button class="adj-btn adj-btn-${i}" onclick="changeAdj(${i},-1)">−</button>
+          <span class="adj-num" id="adj-${i}">+0</span>
+          <button class="adj-btn adj-btn-${i}" onclick="changeAdj(${i},1)">+</button>
         </div>
       </td>
-      <td class="time-val${adj[i]!==0?' changed':''}" id="eff-${i}">${fmtMin(eff)}</td>
-      
+      <td class="time-val" id="eff-${i}">${fmtMin(eff)}</td>
+      <td class="check-cell" rowspan="2">
+        <input type="checkbox" id="done-${i}" onchange="toggleDone(${i})" aria-label="Veksling utført etappe ${e.nr}">
+      </td>
     `;
 
     const r2 = document.createElement('tr');
     r2.className = `row2 ${alt}`;
+    r2.id = `row2-${i}`;
     r2.innerHTML = `
       <td class="loper">${e.loper}</td>
       <td class="label">planlagt</td>
       <td class="label">justert</td>
-      
     `;
 
     tbody.appendChild(r1);
@@ -193,11 +218,29 @@ function render() {
   }
 
   const last = etapper.length - 1;
-  document.getElementById('foot-eff').textContent = fmtMin(starts[last]);
+  document.getElementById('foot-eff').textContent = fmtMin(starts[last] + etapper[last].tid_s / 60);
 }
 
 function changeAdj(idx, delta) {
   adj[idx] += delta;
+  updateAll();
+}
+
+function toggleDone(idx) {
+  done[idx] = document.getElementById('done-' + idx).checked;
+  // If unchecking, uncheck all after too
+  if (!done[idx]) {
+    for (let i = idx; i < done.length; i++) {
+      done[i] = false;
+      document.getElementById('done-' + i).checked = false;
+    }
+  } else {
+    // Auto-check all previous
+    for (let i = 0; i <= idx; i++) {
+      done[i] = true;
+      document.getElementById('done-' + i).checked = true;
+    }
+  }
   updateAll();
 }
 
