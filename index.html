@@ -105,28 +105,41 @@ function fmtMin(totalMin) {
   return Math.floor(t/60) + ':' + String(Math.round(t%60)).padStart(2,'0');
 }
 
-// Compute effective start times for all etapper, cascading adjustments
+// Compute base (planlagt) starts - no adjustments
+function computeBaseStarts() {
+  const base = parseStartMin();
+  const starts = [];
+  let cur = base;
+  for (let i = 0; i < etapper.length; i++) {
+    starts.push(cur);
+    cur += etapper[i].tid_s / 60;
+  }
+  return starts;
+}
+
+// Compute effective start times, cascading adjustments
 function computeStarts() {
   const base = parseStartMin();
   const starts = [];
   let cur = base;
   for (let i = 0; i < etapper.length; i++) {
-    cur += adj[i]; // apply this etappe's adjustment
+    cur += adj[i];
     starts.push(cur);
-    cur += etapper[i].tid_s / 60; // add running time to get next etappe's base
+    cur += etapper[i].tid_s / 60;
   }
   return starts;
 }
 
 function updateAll() {
   const starts = computeStarts();
+  const baseStarts = computeBaseStarts();
   for (let i = 0; i < etapper.length; i++) {
     const eff = starts[i];
     const totalAdj = adj[i];
 
     document.getElementById('adj-' + i).textContent = (totalAdj >= 0 ? '+' : '') + totalAdj;
     document.getElementById('adj-' + i).className = 'adj-num ' + (totalAdj < 0 ? 'neg' : totalAdj > 0 ? 'pos' : '');
-    document.getElementById('plan-' + i).textContent = fmtMin(starts[i] - adj[i]); // planlagt = without this adj
+    document.getElementById('plan-' + i).textContent = fmtMin(baseStarts[i]);
     document.getElementById('eff-' + i).textContent = fmtMin(eff);
     document.getElementById('eff-' + i).className = 'time-val' + (totalAdj !== 0 ? ' changed' : '');
   }
@@ -145,7 +158,7 @@ function render() {
   for (let i = 0; i < etapper.length; i++) {
     const e = etapper[i];
     const eff = starts[i];
-    const planlagt = eff - adj[i];
+    const planlagt = computeBaseStarts()[i];
     const alt = i % 2 === 0 ? 'alt' : '';
 
     const r1 = document.createElement('tr');
